@@ -1,3 +1,7 @@
+YOLO: prediction and output detective info
+PIL: manipulating image, write texts, and drawing bounding box on frame
+tkinter: providing a window GUI
+
 code structure
 before coding:
 conda install pillow
