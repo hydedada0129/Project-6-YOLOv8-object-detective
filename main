@@ -1,1 +1,169 @@
+'''
+需要安裝以下套件
+conda install pillow
+conda install opencv
+conda install py-cpuinfo
+conda install -c conda-forge ultralytics
+'''
 
+import tkinter as tk
+import cv2
+from ultralytics import YOLO
+from PIL import Image, ImageTk, ImageDraw
+
+#  to load a pre-trained YOLOv8 model 
+model = YOLO('yolov8n.pt')      #Pre-trained YOLO Model, yolov8n.pt: Nano – smallest, fastest model, suitable for real-time applications. path: /home/oem/yolov8n.pt  
+
+class Recognition(tk.Frame):
+    def __init__(self, root, title, **kwargs):
+        super().__init__(root, **kwargs)
+        self.video_device = cv2.VideoCapture(0)  #using the OpenCV library (cv2) to initialize the video capture device
+        self.root = root
+        self.title = title
+        self.running = False    # to start and stop the video processing.
+        self.init_ui()          # init interface
+        self.display_loop()     # likely contains a loop or recursive call that keeps fetching video frames from the cv2.VideoCapture object 
+   
+    def __del__(self):
+        try:
+            self.video_device.release()  #release the camera or video resource to free it for other processes or applications when you are done with it.
+        except:
+            pass
+    
+    def init_ui(self):
+        # self.ui_title = tk.Label(self, text=self.title, font=('Arial', 20))
+        self.ui_title = tk.Label(self, text=self.title, font=('GetAzEl', 20))
+
+
+        self.ui_display = tk.Label(self)
+        self.ui_run_button = tk.Button(self, 
+                                       font=('GetAzEl', 24),
+                                        command=self.toggle_run)
+        self.set_run_button()
+        #排版
+        self.ui_title.pack(pady=10)
+        self.ui_run_button.pack(side='bottom', pady=10)
+        self.ui_display.pack(side='bottom', fill='both')
+
+    def set_run_button(self):
+        # run button display
+        
+        button = self.ui_run_button
+        if self.running:
+            button.config(relief='sunken', text='stop recognition')  #if running, text= stop recognition
+            # 'relief' option determines the 3D appearance or border style of a widget
+        else:
+            button.config(relief='raised', text='start recognition')  #if stopping, text=start recognition
+  
+    def toggle_run(self):
+        self.running = not self.running     #starting or stopping the video capture based on its current stat,  
+        # The 'not' operator in Python inverts the value of a boolean
+        self.set_run_button()
+    
+    def display_loop(self):
+        success, capture = self.video_device.read()     
+        # cv2.VideoCapture(0).read()
+        # read() method captures a single frame from the video stream (such as a webcam or video file) and returns two values(success, capture). 
+            # success: If success is False, it means the video device might not be functioning properly. succes is a boolean value, successfully read (True) or not (False).
+            # capture: gets a frame(image) from a video device (e.g., a webcam) using an OpenCV video capture object.  it continuously captures the frame(image). 
+        
+        if success:
+            capture = cv2.cvtColor(capture, cv2.COLOR_BGR2RGB)
+            # converts the captured frame capture from the BGR color space (used by OpenCV) to the RGB color space (used by many other libraries and tools, including PIL/Pillow).
+            pil_img = Image.fromarray(capture)
+            #a function from the PIL library that takes a NumPy array (capture) as input and creates a PIL image object from it.
+            if self.running:
+                            text = ''
+                            try:
+                                # start recognition, using YOLO pre-trained model
+                                results = model(pil_img)
+                                # convert it so you can write words on it. convert it to PIL
+                                pil_draw = ImageDraw.Draw(pil_img)
+                                # to draw shapes, text, and other elements directly onto an image.
+                                res = results[0]
+                                print(res)
+                                '''  
+                                3d tensor array by YOLO, 
+                                orig_img: array([[[ 62,  78, 103],
+                                                  [ 60,  79, 103],
+                                                  [ 61,  80, 104]]], dtype=uint8)
+                                                # [Height, Width, Channels] #
+                                Height: The first dimension represents the height of the image.
+                                Width: The second dimension represents the width of the image.
+                                Channels: The third dimension represents the color channels (usually Red, Green, Blue, or RGB).
+                                '''
+                                
+                                # a batch from first result of results, object detection models often process multiple images in batches for efficiency.
+                                '''
+                                If you pass one image to the model, the model might still return a list of results (since YOLO models can process multiple images in batches).
+                                The first element (results[0]) contains the predictions for the first image (which, in your case, is the only image passed).
+                                '''
+
+                                # holds the coordinates of the bounding boxes for the detected objects.
+                                boxes = res.boxes
+                                # print('result[0] data', res.data)
+                                # print(boxes)
+                                print(boxes)
+                                '''
+                                    x, y, w, h, confidence, class_id (common for object detection outputs)
+                                    xywh: tensor([[388.8678, 290.0598, 479.9895, 378.8979], [201.8188, 190.1787, 80.1319, 94.0608]])
+                                    center (x,y, width, height)
+                                    xywhn: tensor([[0.6076, 0.6043, 0.7500, 0.7894], [0.3153, 0.3962, 0.1252, 0.1960]])
+                                    normalized x,y,w,h
+                                    xyxy: tensor([[148.8730, 100.6108, 628.8625, 479.5087], [161.7528, 143.1483, 241.8847, 237.2091]])
+                                    xyxyn: tensor([[0.2326, 0.2096, 0.9826, 0.9990], [0.2527, 0.2982, 0.3779, 0.4942]])
+
+                                    xywh: Center coordinates and width/height of the bounding box.
+
+                                    xywhn: Normalized version of xywh.
+
+                                    xyxy: Top-left and bottom-right coordinates of the bounding box.
+
+                                    xyxyn: Normalized version of xyxy.
+                                '''
+                                # i (index) of each elements box (x1,y1  x2,y2)
+                                for i, box in enumerate(boxes.xyxy):        
+                                    x1, y1, x2, y2 = box
+                                    rect = [(x1, y1), (x2, y2)]
+                                    #using ImageDraw converts rect from YOLO tesnsor to PIL format.
+                                    pil_draw.rectangle(rect, outline='red', width=3)   
+                                    
+                                    #read objects & confident
+                                    cls_id = int(boxes.cls[i])
+                                    cls_name = res.names[cls_id]
+                                    cls_conf = int(boxes.conf[i] * 100) # 0-100分
+                                    pil_draw.text((x1, y1-20), cls_name, fill='red')
+                                    text += 'object detective: ' + str(cls_name)\
+                                        + ' ,confidence: ' + str(cls_conf) + '\n'
+                            except Exception as e:
+                                #print('Except:', e)
+                                pass
+
+                            # ensures that certain actions are taken regardless of whether the object detection process was successful or resulted in an exception
+                            # Guaranteed Execution: The finally block in Python is designed to execute code, even if an exception occurred within the try block. 
+                            # This is important for actions that must happen, like releasing resources or updating the UI.
+                            finally:
+                                # from ImageDraw to read Image data
+                                self.ui_title.config(text=text)
+                                # get the modified image data, 
+                                pil_img = pil_draw._image
+                            
+            # save the modifying image
+            self.capture_tk = ImageTk.PhotoImage(image=pil_img)   # converts the PIL image into a Tkinter-compatible image.
+            self.ui_display.config(image=self.capture_tk)       # updates the self.ui_display widget (a GUI element) with the image.
+                    
+        # make the drawing function to wait a short period of time for preventing blocking the tk window
+        # if it's blocked, Tkinter can't respond to user events
+        # If your code performs a lengthy operation (like drawing an animation frame), 
+        # During this time, the Tkinter event loop is blocked
+        # This means the user won't be able to interact with the window, and the application will appear frozen.
+        main_window.after(10, self.display_loop)    # 10 (10 milliseconds = 0.01 seconds); the function you want to call after the delay
+main_window = tk.Tk()
+
+main_window.geometry('800x800')
+r1 = Recognition(main_window,'objects recognition')
+r1.pack(expand=True, fill='both')
+
+main_window.mainloop()
+
+r1.video_device.release()
